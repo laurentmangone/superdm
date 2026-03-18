@@ -1,0 +1,15 @@
+.DS_Store
+.build/
+.swiftpm/
+*.xcodeproj
+*.xcworkspace
+Packages/
+Package.resolved
+DerivedData/
+*.dylib
+*.app
+*.entitlements
+*.plist
+xcuserdata/
+*.useross
+*.xcuserstate
