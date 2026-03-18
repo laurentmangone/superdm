@@ -2,6 +2,7 @@ import SwiftUI
 import App
 
 struct PreferencesView: View {
+    @Environment(\.dismiss) private var dismiss
     @ObservedObject private var preferences = Preferences.shared
     @State private var maxParallel: Int = Preferences.shared.maxParallelDownloads
     @State private var downloadFolder: URL = Preferences.shared.defaultDownloadFolder
@@ -45,6 +46,13 @@ struct PreferencesView: View {
         .formStyle(.grouped)
         .padding()
         .frame(width: 450, height: 250)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Close") {
+                    dismiss()
+                }
+            }
+        }
         .onChange(of: maxParallel) { newValue in
             preferences.maxParallelDownloads = newValue
         }

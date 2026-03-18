@@ -6,6 +6,7 @@ struct ContentView: View {
     @State private var selectedDownloadId: UUID?
     @State private var selectedStatus: DownloadStatus?
     @State private var showingAddSheet = false
+    @State private var showingSettings = false
     
     var filteredDownloads: [Download] {
         downloadManager.filterDownloads(by: selectedStatus)
@@ -29,6 +30,12 @@ struct ContentView: View {
             }
         }
         .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button(action: { showingSettings = true }) {
+                    Label("Settings", systemImage: "gearshape")
+                }
+            }
+            
             ToolbarItemGroup(placement: .primaryAction) {
                 Button(action: { showingAddSheet = true }) {
                     Label("Add", systemImage: "plus")
@@ -58,6 +65,9 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showingAddSheet) {
             AddDownloadView()
+        }
+        .sheet(isPresented: $showingSettings) {
+            PreferencesView()
         }
         .onReceive(NotificationCenter.default.publisher(for: .showAddDownload)) { _ in
             showingAddSheet = true
