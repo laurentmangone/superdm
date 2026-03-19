@@ -46,6 +46,11 @@ struct ContentView: View {
                 }
                 .disabled(selectedDownloadId == nil || (selectedDownload?.status != .paused && selectedDownload?.status != .cancelled))
                 
+                Button(action: retrySelected) {
+                    Label("Retry", systemImage: "arrow.clockwise")
+                }
+                .disabled(selectedDownloadId == nil || (selectedDownload?.status != .failed && selectedDownload?.status != .cancelled))
+                
                 Button(action: pauseSelected) {
                     Label("Pause", systemImage: "pause.fill")
                 }
@@ -87,6 +92,11 @@ struct ContentView: View {
     private func cancelSelected() {
         guard let download = selectedDownload else { return }
         DownloadManager.shared.cancelDownload(download)
+    }
+    
+    private func retrySelected() {
+        guard let download = selectedDownload else { return }
+        DownloadManager.shared.retryDownload(download)
     }
     
     private func removeSelected() {
@@ -134,6 +144,17 @@ struct SidebarView: View {
                 )
                 .onTapGesture {
                     selectedStatus = .paused
+                }
+                
+                SidebarRow(
+                    title: "Pending",
+                    icon: "clock.fill",
+                    count: downloadManager.filterDownloads(by: .pending).count,
+                    status: .pending,
+                    isSelected: selectedStatus == .pending
+                )
+                .onTapGesture {
+                    selectedStatus = .pending
                 }
                 
                 SidebarRow(

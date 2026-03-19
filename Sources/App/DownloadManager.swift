@@ -100,6 +100,16 @@ public class DownloadManager: NSObject, ObservableObject {
     public func resumeDownload(_ download: Download) {
         var updated = download
         updated.status = .pending
+        updated.errorMessage = nil
+        updateDownload(updated)
+        startDownload(updated)
+    }
+    
+    public func retryDownload(_ download: Download) {
+        var updated = download
+        updated.status = .pending
+        updated.downloadedBytes = 0
+        updated.errorMessage = nil
         updateDownload(updated)
         startDownload(updated)
     }
@@ -176,6 +186,7 @@ extension DownloadManager: URLSessionDownloadDelegate {
         downloadTasks.removeValue(forKey: taskId)
         speedTrackers.removeValue(forKey: taskId)
         activeDownloads.removeValue(forKey: taskId)
+        resumeData.removeValue(forKey: taskId)
 
         updateDownload(download)
         startNextPending()

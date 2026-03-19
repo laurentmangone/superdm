@@ -54,17 +54,27 @@ public struct Download: Identifiable, Codable, Hashable {
     }
 
     public var formattedSize: String {
-        ByteCountFormatter.string(fromByteCount: totalBytes, countStyle: .file)
+        formatBytes(totalBytes)
     }
 
     public var formattedDownloaded: String {
-        ByteCountFormatter.string(fromByteCount: downloadedBytes, countStyle: .file)
+        formatBytes(downloadedBytes)
     }
 
     public var formattedSpeed: String {
-        guard speed > 0 else { return "--" }
-        let formatter = ByteCountFormatter()
-        formatter.countStyle = .file
-        return "\(formatter.string(fromByteCount: Int64(speed)))/s"
+        guard speed > 0 else { return "-- Ko/s" }
+        return "\(formatBytes(Int64(speed)))/s"
+    }
+    
+    private func formatBytes(_ bytes: Int64) -> String {
+        if bytes >= 1_073_741_824 {
+            return String(format: "%.2f Go", Double(bytes) / 1_073_741_824)
+        } else if bytes >= 1_048_576 {
+            return String(format: "%.2f Mo", Double(bytes) / 1_048_576)
+        } else if bytes >= 1024 {
+            return String(format: "%.2f Ko", Double(bytes) / 1024)
+        } else {
+            return "\(bytes) o"
+        }
     }
 }
