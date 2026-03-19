@@ -3,7 +3,7 @@ import App
 
 struct ContentView: View {
     @ObservedObject var downloadManager: DownloadManager
-    @State private var selectedDownloadId: UUID?
+    @State private var selectedDownloadIds: Set<UUID> = []
     @State private var selectedStatus: DownloadStatus?
     @State private var showingAddSheet = false
     @State private var showingSettings = false
@@ -12,9 +12,28 @@ struct ContentView: View {
         downloadManager.filterDownloads(by: selectedStatus)
     }
     
-    private var selectedDownload: Download? {
-        guard let id = selectedDownloadId else { return nil }
-        return downloadManager.downloads.first { $0.id == id }
+    private var selectedDownloads: [Download] {
+        downloadManager.downloads.filter { selectedDownloadIds.contains($0.id) }
+    }
+    
+    private var canStart: Bool {
+        !selectedDownloadIds.isEmpty && selectedDownloads.contains { $0.status == .paused || $0.status == .cancelled }
+    }
+    
+    private var canRetry: Bool {
+        !selectedDownloadIds.isEmpty && selectedDownloads.contains { $0.status == .failed || $0.status == .cancelled }
+    }
+    
+    private var canPause: Bool {
+        !selectedDownloadIds.isEmpty && selectedDownloads.contains { $0.status == .downloading }
+    }
+    
+    private var canCancel: Bool {
+        !selectedDownloadIds.isEmpty && selectedDownloads.contains { $0.status != .completed }
+    }
+    
+    private var canDelete: Bool {
+        !selectedDownloadIds.isEmpty
     }
     
     var body: some View {
@@ -25,7 +44,7 @@ struct ContentView: View {
             VStack(spacing: 0) {
                 DownloadListView(
                     downloads: filteredDownloads,
-                    selectedDownloadId: $selectedDownloadId
+                    selectedDownloadIds: $selectedDownloadIds
                 )
             }
         }
@@ -34,38 +53,45 @@ struct ContentView: View {
                 Button(action: { showingSettings = true }) {
                     Label("Settings", systemImage: "gearshape")
                 }
+                .help("Preferences")
             }
             
             ToolbarItemGroup(placement: .primaryAction) {
                 Button(action: { showingAddSheet = true }) {
                     Label("Add", systemImage: "plus")
                 }
+                .help("Add download")
                 
                 Button(action: startSelected) {
                     Label("Start", systemImage: "play.fill")
                 }
-                .disabled(selectedDownloadId == nil || (selectedDownload?.status != .paused && selectedDownload?.status != .cancelled))
+                .disabled(!canStart)
+                .help("Resume download")
                 
                 Button(action: retrySelected) {
                     Label("Retry", systemImage: "arrow.clockwise")
                 }
-                .disabled(selectedDownloadId == nil || (selectedDownload?.status != .failed && selectedDownload?.status != .cancelled))
+                .disabled(!canRetry)
+                .help("Retry failed download")
                 
                 Button(action: pauseSelected) {
                     Label("Pause", systemImage: "pause.fill")
                 }
-                .disabled(selectedDownloadId == nil || selectedDownload?.status != .downloading)
+                .disabled(!canPause)
+                .help("Pause download")
                 
                 Button(action: cancelSelected) {
                     Label("Cancel", systemImage: "xmark")
                 }
-                .disabled(selectedDownloadId == nil || selectedDownload?.status == .completed)
+                .disabled(!canCancel)
+                .help("Cancel download")
                 
                 Button(action: removeSelected) {
                     Label("Delete", systemImage: "trash")
                 }
-                .disabled(selectedDownloadId == nil)
+                .disabled(!canDelete)
                 .keyboardShortcut(.delete, modifiers: [])
+                .help("Delete download")
             }
         }
         .sheet(isPresented: $showingAddSheet) {
@@ -80,29 +106,34 @@ struct ContentView: View {
     }
     
     private func startSelected() {
-        guard let download = selectedDownload else { return }
-        DownloadManager.shared.resumeDownload(download)
+        for download in selectedDownloads where download.status == .paused || download.status == .cancelled {
+            DownloadManager.shared.resumeDownload(download)
+        }
     }
     
     private func pauseSelected() {
-        guard let download = selectedDownload else { return }
-        DownloadManager.shared.pauseDownload(download)
+        for download in selectedDownloads where download.status == .downloading {
+            DownloadManager.shared.pauseDownload(download)
+        }
     }
     
     private func cancelSelected() {
-        guard let download = selectedDownload else { return }
-        DownloadManager.shared.cancelDownload(download)
+        for download in selectedDownloads where download.status != .completed {
+            DownloadManager.shared.cancelDownload(download)
+        }
     }
     
     private func retrySelected() {
-        guard let download = selectedDownload else { return }
-        DownloadManager.shared.retryDownload(download)
+        for download in selectedDownloads where download.status == .failed || download.status == .cancelled {
+            DownloadManager.shared.retryDownload(download)
+        }
     }
     
     private func removeSelected() {
-        guard let download = selectedDownload else { return }
-        DownloadManager.shared.removeDownload(download)
-        selectedDownloadId = nil
+        for download in selectedDownloads {
+            DownloadManager.shared.removeDownload(download)
+        }
+        selectedDownloadIds.removeAll()
     }
 }
 
@@ -238,7 +269,7 @@ struct SidebarRow: View {
 
 struct DownloadListView: View {
     let downloads: [Download]
-    @Binding var selectedDownloadId: UUID?
+    @Binding var selectedDownloadIds: Set<UUID>
     
     var body: some View {
         if downloads.isEmpty {
@@ -255,9 +286,9 @@ struct DownloadListView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            List(selection: $selectedDownloadId) {
+            List(selection: $selectedDownloadIds) {
                 ForEach(downloads, id: \.id) { download in
-                    DownloadRowView(download: download, isSelected: selectedDownloadId == download.id)
+                    DownloadRowView(download: download, isSelected: selectedDownloadIds.contains(download.id))
                         .tag(download.id)
                 }
             }
