@@ -12,6 +12,11 @@ public class DownloadManager: NSObject, ObservableObject {
     private var downloadTasks: [UUID: URLSessionDownloadTask] = [:]
     private var speedTrackers: [UUID: SpeedTracker] = [:]
     private var resumeData: [UUID: Data] = [:]
+    
+    private let tempDirectory: URL = {
+        let tempDir = FileManager.default.temporaryDirectory
+        return tempDir
+    }()
 
     public override init() {
         super.init()
@@ -19,9 +24,21 @@ public class DownloadManager: NSObject, ObservableObject {
         urlSession = URLSession(configuration: config, delegate: self, delegateQueue: .main)
         loadDownloads()
         resumeActiveDownloads()
+        cleanupTempFiles()
         
         Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             self?.objectWillChange.send()
+        }
+    }
+    
+    private func cleanupTempFiles() {
+        do {
+            let contents = try FileManager.default.contentsOfDirectory(at: tempDirectory, includingPropertiesForKeys: nil)
+            for file in contents where file.lastPathComponent.hasPrefix("CFNetworkDownload_") && file.pathExtension == "tmp" {
+                try? FileManager.default.removeItem(at: file)
+            }
+        } catch {
+            print("Failed to cleanup temp files: \(error)")
         }
     }
 
@@ -190,6 +207,7 @@ extension DownloadManager: URLSessionDownloadDelegate {
 
         updateDownload(download)
         startNextPending()
+        cleanupTempFiles()
     }
 
     public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
