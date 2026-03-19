@@ -1,25 +1,25 @@
 # SuperDM
 
-Gestionnaire de téléchargements pour macOS avec interface CLI et GUI.
+Download manager for macOS with CLI and GUI interfaces.
 
-## Fonctionnalités
+## Features
 
-### GUI (Interface graphique)
-- Interface moderne style macOS Tahoe
-- Liste des téléchargements avec filtres par statut
-- Actions en masse (multi-sélection)
-- Contrôles: Ajouter, Démarrer, Pauser, Annuler, Réessayer, Supprimer
-- Préférences: nombre max de téléchargements parallèles, dossier de destination
+### GUI (Graphical Interface)
+- Modern macOS Tahoe-style interface
+- Download list with status filters
+- Bulk actions (multi-selection)
+- Controls: Add, Start, Pause, Cancel, Retry, Delete
+- Preferences: max parallel downloads, destination folder
 
-### CLI (Ligne de commande)
-- Ajout de téléchargements par URL
-- Import depuis fichier (une URL par ligne)
-- Liste des téléchargements avec filtres
-- Contrôle des téléchargements
+### CLI (Command Line)
+- Add downloads by URL
+- Import from file (one URL per line)
+- List downloads with filters
+- Download control
 
 ## Installation
 
-### Prérequis
+### Requirements
 - macOS 13.0+
 - Swift 5.9+
 
@@ -29,57 +29,57 @@ swift build -c release
 ```
 
 ### DMG
-Téléchargez `superdm.dmg` et glissez l'application dans `/Applications`.
+Download `superdm.dmg` and drag the app to `/Applications`.
 
-## Utilisation
+## Usage
 
 ### GUI
 
-Lancez l'application:
+Launch the app:
 ```bash
 swift run GUI
 ```
 
-Ou ouvrez `superdm-gui.app` depuis `/Applications`.
+Or open `superdm-gui.app` from `/Applications`.
 
-#### Raccourcis clavier
-- `Cmd+N` : Nouveau téléchargement
-- `Cmd+,` : Préférences
-- `Cmd+Click` : Sélection multiple
-- `Shift+Click` : Sélection par plage
-- `Delete` : Supprimer
+#### Keyboard Shortcuts
+- `Cmd+N` : New download
+- `Cmd+,` : Preferences
+- `Cmd+Click` : Multi-select
+- `Shift+Click` : Range select
+- `Delete` : Delete
 
-#### Barre d'outils
-| Bouton | Action |
+#### Toolbar
+| Button | Action |
 |--------|--------|
-| ⚙️ | Préférences |
-| ➕ | Ajouter un téléchargement |
-| ▶️ | Démarrer/Reprendre |
-| 🔄 | Réessayer (échoué) |
-| ⏸️ | Pauser |
-| ✖️ | Annuler |
-| 🗑️ | Supprimer |
+| ⚙️ | Preferences |
+| ➕ | Add a download |
+| ▶️ | Start/Resume |
+| 🔄 | Retry (failed) |
+| ⏸️ | Pause |
+| ✖️ | Cancel |
+| 🗑️ | Delete |
 
 ### CLI
 
-Lancez le CLI:
+Launch the CLI:
 ```bash
-swift run CLI <commande>
+swift run CLI <command>
 ```
 
-#### Commandes
+#### Commands
 
-**Ajouter un téléchargement:**
+**Add a download:**
 ```bash
-superdm add <url> [--to <dossier>]
+superdm add <url> [--to <folder>]
 ```
 
-**Lister les téléchargements:**
+**List downloads:**
 ```bash
 superdm list [--status <all|downloading|paused|completed|failed|pending>]
 ```
 
-**Contrôler un téléchargement:**
+**Control a download:**
 ```bash
 superdm pause <id>
 superdm resume <id>
@@ -87,32 +87,32 @@ superdm cancel <id>
 superdm remove <id>
 ```
 
-**Préférences:**
+**Preferences:**
 ```bash
-superdm preferences                    # Afficher les préférences
-superdm preferences --max-parallel 5  # Définir le nombre max de téléchargements parallèles
-superdm preferences --folder ~/Downloads  # Définir le dossier de téléchargement
+superdm preferences                    # Show preferences
+superdm preferences --max-parallel 5  # Set max parallel downloads
+superdm preferences --folder ~/Downloads  # Set download folder
 ```
 
-#### Exemples
+#### Examples
 
 ```bash
-# Ajouter un téléchargement
+# Add a download
 swift run CLI add https://example.com/file.zip
 
-# Ajouter avec dossier personnalisé
+# Add with custom folder
 swift run CLI add https://example.com/file.zip --to ~/Downloads
 
-# Lister les téléchargements en cours
+# List ongoing downloads
 swift run CLI list --status downloading
 
-# Mettre en pause
+# Pause
 swift run CLI pause 550e8400-e29b-41d4-a716-446655440000
 
-# Réessayer un téléchargement échoué
+# Retry a failed download
 swift run CLI resume 550e8400-e29b-41d4-a716-446655440000
 
-# Définir 5 téléchargements parallèles
+# Set 5 parallel downloads
 swift run CLI preferences --max-parallel 5
 ```
 
@@ -121,19 +121,19 @@ swift run CLI preferences --max-parallel 5
 ```
 superdm/
 ├── Sources/
-│   ├── App/           # Code partagé (DownloadManager, Database, Preferences)
-│   ├── CLI/           # Interface en ligne de commande
-│   └── GUI/           # Interface graphique SwiftUI
-├── Package.swift      # Configuration du package Swift
-└── superdm.dmg        # Installateur
+│   ├── App/           # Shared code (DownloadManager, Database, Preferences)
+│   ├── CLI/           # Command line interface
+│   └── GUI/           # SwiftUI graphical interface
+├── Package.swift      # Swift package configuration
+└── superdm.dmg        # Installer
 ```
 
-### Composants principaux
+### Main Components
 
-- **DownloadManager**: Gère les téléchargements avec URLSession
-- **Database**: Stockage persistant avec SQLite
-- **Preferences**: Configuration utilisateur avec UserDefaults
+- **DownloadManager**: Manages downloads with URLSession
+- **Database**: Persistent storage with SQLite
+- **Preferences**: User settings with UserDefaults
 
-## Licence
+## License
 
 MIT
