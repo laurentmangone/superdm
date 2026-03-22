@@ -12,33 +12,86 @@ public class DownloadManager: NSObject, ObservableObject {
     private var downloadTasks: [UUID: URLSessionDownloadTask] = [:]
     private var speedTrackers: [UUID: SpeedTracker] = [:]
     private var resumeData: [UUID: Data] = [:]
+    private var resumeBaseBytes: [UUID: Int64] = [:]
+    private var lastDbUpdate: [UUID: Date] = [:]
+    private let dbUpdateInterval: TimeInterval = 5.0
     
     private let tempDirectory: URL = {
-        let tempDir = FileManager.default.temporaryDirectory
-        return tempDir
+        return FileManager.default.temporaryDirectory
+    }()
+    
+    private lazy var sessionCacheDirectory: URL = {
+        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+        return caches.appendingPathComponent("com.apple.nsurlsessiond/Downloads/superdm")
     }()
 
     public override init() {
         super.init()
         let config = URLSessionConfiguration.default
-        urlSession = URLSession(configuration: config, delegate: self, delegateQueue: .main)
+        config.timeoutIntervalForRequest = 60
+        config.timeoutIntervalForResource = 3600
+        config.httpMaximumConnectionsPerHost = 4
+        urlSession = URLSession(configuration: config, delegate: self, delegateQueue: nil)
         loadDownloads()
         resumeActiveDownloads()
         cleanupTempFiles()
         
         Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-            self?.objectWillChange.send()
+            DispatchQueue.main.async {
+                self?.objectWillChange.send()
+            }
+        }
+        
+        Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+            DispatchQueue.main.async {
+                self?.reloadDownloadsFromDatabase()
+            }
+        }
+    }
+    
+    private func reloadDownloadsFromDatabase() {
+        do {
+            let dbDownloads = try Database.shared.fetchAll()
+            var updated = false
+            
+            for dbDownload in dbDownloads {
+                if let index = downloads.firstIndex(where: { $0.id == dbDownload.id }) {
+                    let currentStatus = downloads[index].status
+                    if currentStatus == .downloading || currentStatus == .pending {
+                        continue
+                    }
+                    if downloads[index].status != dbDownload.status || 
+                       downloads[index].downloadedBytes != dbDownload.downloadedBytes ||
+                       downloads[index].totalBytes != dbDownload.totalBytes {
+                        downloads[index] = dbDownload
+                        updated = true
+                    }
+                } else {
+                    downloads.insert(dbDownload, at: 0)
+                    updated = true
+                }
+            }
+            
+            if updated {
+                objectWillChange.send()
+            }
+        } catch {
+            print("Failed to reload downloads: \(error)")
         }
     }
     
     private func cleanupTempFiles() {
+        cleanupDirectory(tempDirectory)
+        cleanupDirectory(sessionCacheDirectory)
+    }
+    
+    private func cleanupDirectory(_ directory: URL) {
         do {
-            let contents = try FileManager.default.contentsOfDirectory(at: tempDirectory, includingPropertiesForKeys: nil)
-            for file in contents where file.lastPathComponent.hasPrefix("CFNetworkDownload_") && file.pathExtension == "tmp" {
+            let contents = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+            for file in contents where file.lastPathComponent.hasPrefix("CFNetworkDownload_") {
                 try? FileManager.default.removeItem(at: file)
             }
         } catch {
-            print("Failed to cleanup temp files: \(error)")
         }
     }
 
@@ -84,6 +137,7 @@ public class DownloadManager: NSObject, ObservableObject {
         let task: URLSessionDownloadTask
         if let data = resumeData[download.id] {
             task = urlSession.downloadTask(withResumeData: data)
+            resumeBaseBytes[download.id] = download.downloadedBytes
             resumeData.removeValue(forKey: download.id)
         } else {
             task = urlSession.downloadTask(with: download.url)
@@ -142,6 +196,7 @@ public class DownloadManager: NSObject, ObservableObject {
         activeDownloads.removeValue(forKey: download.id)
         speedTrackers.removeValue(forKey: download.id)
         resumeData.removeValue(forKey: download.id)
+        resumeBaseBytes.removeValue(forKey: download.id)
     }
 
     public func removeDownload(_ download: Download) {
@@ -189,6 +244,7 @@ extension DownloadManager: URLSessionDownloadDelegate {
 
         let destination = download.destinationFolder.appendingPathComponent(download.filename)
         do {
+            try FileManager.default.createDirectory(at: download.destinationFolder, withIntermediateDirectories: true)
             if FileManager.default.fileExists(atPath: destination.path) {
                 try FileManager.default.removeItem(at: destination)
             }
@@ -204,40 +260,64 @@ extension DownloadManager: URLSessionDownloadDelegate {
         speedTrackers.removeValue(forKey: taskId)
         activeDownloads.removeValue(forKey: taskId)
         resumeData.removeValue(forKey: taskId)
+        resumeBaseBytes.removeValue(forKey: taskId)
 
-        updateDownload(download)
-        startNextPending()
-        cleanupTempFiles()
+        DispatchQueue.main.async { [weak self] in
+            self?.updateDownload(download)
+            self?.startNextPending()
+        }
     }
 
     public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
         guard let taskId = downloadTasks.first(where: { $0.value == downloadTask })?.key,
               var download = downloads.first(where: { $0.id == taskId }) else { return }
 
-        download.downloadedBytes = totalBytesWritten
-        download.totalBytes = totalBytesExpectedToWrite
+        if let baseBytes = resumeBaseBytes[taskId], baseBytes > 0 {
+            download.downloadedBytes = baseBytes + totalBytesWritten
+            if totalBytesExpectedToWrite > 0 {
+                download.totalBytes = baseBytes + totalBytesExpectedToWrite
+            }
+        } else {
+            download.downloadedBytes = totalBytesWritten
+            download.totalBytes = totalBytesExpectedToWrite
+        }
 
         if let tracker = speedTrackers[taskId] {
             download.speed = tracker.calculateSpeed(bytes: totalBytesWritten)
         }
 
-        if let index = downloads.firstIndex(where: { $0.id == taskId }) {
-            downloads[index] = download
-            objectWillChange.send()
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            if let index = self.downloads.firstIndex(where: { $0.id == taskId }) {
+                self.downloads[index] = download
+                self.objectWillChange.send()
+            }
+            
+            let now = Date()
+            if let lastUpdate = self.lastDbUpdate[taskId], now.timeIntervalSince(lastUpdate) < self.dbUpdateInterval {
+                return
+            }
+            self.lastDbUpdate[taskId] = now
+            self.updateDownload(download)
         }
     }
 
     public func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         guard let downloadTask = task as? URLSessionDownloadTask,
-              let taskId = downloadTasks.first(where: { $0.value == downloadTask })?.key,
-              var download = downloads.first(where: { $0.id == taskId }),
-              let error = error else { return }
+              let taskId = downloadTasks.first(where: { $0.value == downloadTask })?.key else { return }
+
+        guard var download = downloads.first(where: { $0.id == taskId }) else { return }
+
+        if download.status == .completed {
+            downloadTasks.removeValue(forKey: taskId)
+            return
+        }
+
+        guard let error = error else { return }
 
         let nsError = error as NSError
-        if nsError.code == NSURLErrorCancelled {
-            if resumeData[taskId] != nil {
-                return
-            }
+        if nsError.code == NSURLErrorCancelled && resumeData[taskId] != nil {
+            return
         }
 
         download.status = .failed
@@ -246,9 +326,13 @@ extension DownloadManager: URLSessionDownloadDelegate {
         downloadTasks.removeValue(forKey: taskId)
         speedTrackers.removeValue(forKey: taskId)
         activeDownloads.removeValue(forKey: taskId)
+        resumeData.removeValue(forKey: taskId)
+        resumeBaseBytes.removeValue(forKey: taskId)
 
-        updateDownload(download)
-        startNextPending()
+        DispatchQueue.main.async { [weak self] in
+            self?.updateDownload(download)
+            self?.startNextPending()
+        }
     }
 }
 

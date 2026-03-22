@@ -16,8 +16,15 @@ struct AddDownloadView: View {
                 .fontWeight(.semibold)
             
             VStack(alignment: .leading, spacing: 8) {
-                Text("URL")
-                    .font(.headline)
+                HStack {
+                    Text("URL")
+                        .font(.headline)
+                    Spacer()
+                    Button("Import from File...") {
+                        importFromFile()
+                    }
+                    .buttonStyle(.link)
+                }
                 TextField("Enter URL or drag file here", text: $urlString)
                     .textFieldStyle(.roundedBorder)
             }
@@ -79,19 +86,50 @@ struct AddDownloadView: View {
     }
     
     private func addDownload() {
-        guard let url = URL(string: urlString) else {
-            errorMessage = "Invalid URL"
-            showError = true
-            return
+        let urls = urlString.components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        
+        var addedCount = 0
+        var errors: [String] = []
+        
+        for urlStr in urls {
+            guard let url = URL(string: urlStr) else {
+                errors.append("Invalid URL: \(urlStr)")
+                continue
+            }
+            
+            do {
+                let download = try DownloadManager.shared.addDownload(url: url, destinationFolder: destinationFolder)
+                DownloadManager.shared.startDownload(download)
+                addedCount += 1
+            } catch {
+                errors.append("\(urlStr): \(error.localizedDescription)")
+            }
         }
         
-        do {
-            let download = try DownloadManager.shared.addDownload(url: url, destinationFolder: destinationFolder)
-            DownloadManager.shared.startDownload(download)
+        if addedCount > 0 {
             dismiss()
-        } catch {
-            errorMessage = error.localizedDescription
+        } else if !errors.isEmpty {
+            errorMessage = errors.joined(separator: "\n")
             showError = true
+        }
+    }
+    
+    private func importFromFile() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.plainText]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        
+        if panel.runModal() == .OK, let url = panel.url {
+            do {
+                let content = try String(contentsOf: url, encoding: .utf8)
+                urlString = content
+            } catch {
+                errorMessage = "Failed to read file: \(error.localizedDescription)"
+                showError = true
+            }
         }
     }
 }

@@ -36,6 +36,9 @@ public class Database {
             let dbPath = appDir.appendingPathComponent("downloads.sqlite3").path
             db = try Connection(dbPath)
 
+            try db?.execute("PRAGMA journal_mode = WAL")
+            try db?.execute("PRAGMA busy_timeout = 5000")
+
             try db?.run(downloads.create(ifNotExists: true) { t in
                 t.column(id, primaryKey: true)
                 t.column(url)

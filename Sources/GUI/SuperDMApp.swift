@@ -32,6 +32,7 @@ extension Notification.Name {
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        UserDefaults.standard.set(0.5, forKey: "NSInitialToolTipDelay")
         _ = DownloadManager.shared
         _ = Preferences.shared
     }
