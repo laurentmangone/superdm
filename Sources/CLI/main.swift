@@ -6,18 +6,18 @@ struct SuperDM: ParsableCommand {
     static var configuration = CommandConfiguration(
         commandName: "superdm",
         subcommands: [
-            AddCommand.self,
-            ListCommand.self,
-            PauseCommand.self,
-            ResumeCommand.self,
-            CancelCommand.self,
-            RemoveCommand.self,
-            PreferencesCommand.self
+            Add.self,
+            List.self,
+            Pause.self,
+            Resume.self,
+            Cancel.self,
+            Remove.self,
+            Preferences.self
         ]
     )
 }
 
-struct AddCommand: ParsableCommand {
+struct Add: ParsableCommand {
     static var configuration = CommandConfiguration(abstract: "Add a new download")
 
     @Argument(help: "URL to download")
@@ -35,29 +35,29 @@ struct AddCommand: ParsableCommand {
         if let to = to {
             destination = URL(fileURLWithPath: to)
         } else {
-            destination = Preferences.shared.defaultDownloadFolder
+            destination = App.Preferences.shared.defaultDownloadFolder
         }
 
-        DownloadManager.keepAliveForCLI()
-        let manager = DownloadManager.shared
+        App.DownloadManager.keepAliveForCLI()
+        let manager = App.DownloadManager.shared
         var download = try manager.addDownload(url: url, destinationFolder: destination)
         download.status = .pending
-        try Database.shared.update(download)
+        try App.Database.shared.update(download)
         print("Added download: \(download.filename) (ID: \(download.id))")
         
         RunLoop.main.run(until: Date(timeIntervalSinceNow: 60))
     }
 }
 
-struct ListCommand: ParsableCommand {
+struct List: ParsableCommand {
     static var configuration = CommandConfiguration(abstract: "List downloads")
 
     @Option(name: .short, help: "Filter by status: all, downloading, paused, completed, failed")
     var status: String = "all"
 
     func run() throws {
-        let manager = DownloadManager.shared
-        let filterStatus: DownloadStatus?
+        let manager = App.DownloadManager.shared
+        let filterStatus: App.DownloadStatus?
 
         switch status.lowercased() {
         case "all": filterStatus = nil
@@ -65,8 +65,9 @@ struct ListCommand: ParsableCommand {
         case "paused": filterStatus = .paused
         case "completed": filterStatus = .completed
         case "failed": filterStatus = .failed
+        case "pending": filterStatus = .pending
         default:
-            throw ValidationError("Invalid status. Use: all, downloading, paused, completed, failed")
+            throw ValidationError("Invalid status. Use: all, downloading, paused, completed, failed, pending")
         }
 
         let downloads = manager.filterDownloads(by: filterStatus)
@@ -92,7 +93,7 @@ struct ListCommand: ParsableCommand {
     }
 }
 
-struct PauseCommand: ParsableCommand {
+struct Pause: ParsableCommand {
     static var configuration = CommandConfiguration(abstract: "Pause a download")
 
     @Argument(help: "Download ID")
@@ -103,7 +104,7 @@ struct PauseCommand: ParsableCommand {
             throw ValidationError("Invalid UUID")
         }
 
-        let manager = DownloadManager.shared
+        let manager = App.DownloadManager.shared
         guard let download = manager.downloads.first(where: { $0.id == id }) else {
             throw ValidationError("Download not found")
         }
@@ -113,7 +114,7 @@ struct PauseCommand: ParsableCommand {
     }
 }
 
-struct ResumeCommand: ParsableCommand {
+struct Resume: ParsableCommand {
     static var configuration = CommandConfiguration(abstract: "Resume a download")
 
     @Argument(help: "Download ID")
@@ -124,7 +125,7 @@ struct ResumeCommand: ParsableCommand {
             throw ValidationError("Invalid UUID")
         }
 
-        let manager = DownloadManager.shared
+        let manager = App.DownloadManager.shared
         guard let download = manager.downloads.first(where: { $0.id == id }) else {
             throw ValidationError("Download not found")
         }
@@ -134,7 +135,7 @@ struct ResumeCommand: ParsableCommand {
     }
 }
 
-struct CancelCommand: ParsableCommand {
+struct Cancel: ParsableCommand {
     static var configuration = CommandConfiguration(abstract: "Cancel a download")
 
     @Argument(help: "Download ID")
@@ -145,7 +146,7 @@ struct CancelCommand: ParsableCommand {
             throw ValidationError("Invalid UUID")
         }
 
-        let manager = DownloadManager.shared
+        let manager = App.DownloadManager.shared
         guard let download = manager.downloads.first(where: { $0.id == id }) else {
             throw ValidationError("Download not found")
         }
@@ -155,7 +156,7 @@ struct CancelCommand: ParsableCommand {
     }
 }
 
-struct RemoveCommand: ParsableCommand {
+struct Remove: ParsableCommand {
     static var configuration = CommandConfiguration(abstract: "Remove a download")
 
     @Argument(help: "Download ID")
@@ -166,7 +167,7 @@ struct RemoveCommand: ParsableCommand {
             throw ValidationError("Invalid UUID")
         }
 
-        let manager = DownloadManager.shared
+        let manager = App.DownloadManager.shared
         guard let download = manager.downloads.first(where: { $0.id == id }) else {
             throw ValidationError("Download not found")
         }
@@ -176,7 +177,7 @@ struct RemoveCommand: ParsableCommand {
     }
 }
 
-struct PreferencesCommand: ParsableCommand {
+struct Preferences: ParsableCommand {
     static var configuration = CommandConfiguration(abstract: "Show or set preferences")
 
     @Option(name: .short, help: "Maximum parallel downloads")
@@ -186,7 +187,7 @@ struct PreferencesCommand: ParsableCommand {
     var folder: String?
 
     func run() throws {
-        let prefs = Preferences.shared
+        let prefs = App.Preferences.shared
 
         if let maxParallel = maxParallel {
             prefs.maxParallelDownloads = maxParallel
