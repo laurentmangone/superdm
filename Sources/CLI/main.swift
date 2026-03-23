@@ -38,33 +38,14 @@ struct AddCommand: ParsableCommand {
             destination = Preferences.shared.defaultDownloadFolder
         }
 
+        DownloadManager.keepAliveForCLI()
         let manager = DownloadManager.shared
-        let download = try manager.addDownload(url: url, destinationFolder: destination)
+        var download = try manager.addDownload(url: url, destinationFolder: destination)
+        download.status = .pending
+        try Database.shared.update(download)
         print("Added download: \(download.filename) (ID: \(download.id))")
-
-        let startTime = Date()
-        var lastProgress: Double = 0
-        while download.status == .downloading || download.status == .pending {
-            Thread.sleep(forTimeInterval: 0.5)
-            if let updated = manager.downloads.first(where: { $0.id == download.id }) {
-                if updated.progress != lastProgress {
-                    print("Progress: \(String(format: "%.1f", updated.progress * 100))% - \(updated.formattedDownloaded)/\(updated.formattedSize)")
-                    lastProgress = updated.progress
-                }
-                if updated.status == .completed {
-                    print("Download completed!")
-                    break
-                }
-                if updated.status == .failed {
-                    print("Download failed: \(updated.errorMessage ?? "Unknown error")")
-                    break
-                }
-            }
-            if Date().timeIntervalSince(startTime) > 300 {
-                print("Timeout after 5 minutes")
-                break
-            }
-        }
+        
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 60))
     }
 }
 

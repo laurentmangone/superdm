@@ -71,6 +71,8 @@ public class Database {
             createdAt <- download.createdAt.timeIntervalSince1970,
             updatedAt <- download.updatedAt.timeIntervalSince1970
         )
+        
+        print("DB Insert: \(download.filename) - status: \(download.status.rawValue)")
         try db?.run(insert)
     }
 

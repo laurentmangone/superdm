@@ -16,6 +16,8 @@ public class DownloadManager: NSObject, ObservableObject {
     private var lastDbUpdate: [UUID: Date] = [:]
     private let dbUpdateInterval: TimeInterval = 5.0
     
+    private static var keepAlive: DownloadManager?
+    
     private let tempDirectory: URL = {
         return FileManager.default.temporaryDirectory
     }()
@@ -47,6 +49,14 @@ public class DownloadManager: NSObject, ObservableObject {
                 self?.reloadDownloadsFromDatabase()
             }
         }
+        
+        if DownloadManager.keepAlive == nil {
+            DownloadManager.keepAlive = self
+        }
+    }
+    
+    public static func keepAliveForCLI() {
+        let _ = shared
     }
     
     private func reloadDownloadsFromDatabase() {
@@ -58,6 +68,11 @@ public class DownloadManager: NSObject, ObservableObject {
                 if let index = downloads.firstIndex(where: { $0.id == dbDownload.id }) {
                     let currentStatus = downloads[index].status
                     if currentStatus == .downloading || currentStatus == .pending {
+                        if downloads[index].status == .downloading && downloads[index].downloadedBytes < dbDownload.downloadedBytes {
+                            downloads[index].downloadedBytes = dbDownload.downloadedBytes
+                            downloads[index].totalBytes = dbDownload.totalBytes
+                            updated = true
+                        }
                         continue
                     }
                     if downloads[index].status != dbDownload.status || 
@@ -67,13 +82,17 @@ public class DownloadManager: NSObject, ObservableObject {
                         updated = true
                     }
                 } else {
-                    downloads.insert(dbDownload, at: 0)
+                    print("GUI: New download from DB: \(dbDownload.filename) - status: \(dbDownload.status)")
+                    var newDownload = dbDownload
+                    newDownload.status = .pending
+                    downloads.insert(newDownload, at: 0)
                     updated = true
                 }
             }
             
             if updated {
                 objectWillChange.send()
+                startNextPending()
             }
         } catch {
             print("Failed to reload downloads: \(error)")
@@ -123,6 +142,9 @@ public class DownloadManager: NSObject, ObservableObject {
     }
 
     public func startDownload(_ download: Download) {
+        let currentActive = activeDownloads.count
+        print("startDownload: \(download.filename) - active: \(currentActive), max: \(preferences.maxParallelDownloads)")
+        
         guard activeDownloads.count < preferences.maxParallelDownloads else {
             var updated = download
             updated.status = .pending
