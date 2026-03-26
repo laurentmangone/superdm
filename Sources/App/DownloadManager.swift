@@ -15,7 +15,7 @@ public class DownloadManager: NSObject, ObservableObject {
     private var resumeBaseBytes: [UUID: Int64] = [:]
     private var lastDbUpdate: [UUID: Date] = [:]
     private let dbUpdateInterval: TimeInterval = 5.0
-    
+    private static let maxRetryCount = 3
     private static var keepAlive: DownloadManager?
     
     private let tempDirectory: URL = {
@@ -251,6 +251,19 @@ public class DownloadManager: NSObject, ObservableObject {
                 startDownload(download)
             }
         }
+        
+        let failedToRetry = downloads.filter { $0.status == .failed && $0.retryCount < Self.maxRetryCount }
+        for download in failedToRetry {
+            if activeDownloads.count < preferences.maxParallelDownloads {
+                var retry = download
+                retry.status = .pending
+                retry.retryCount += 1
+                retry.downloadedBytes = 0
+                retry.errorMessage = nil
+                updateDownload(retry)
+                startDownload(retry)
+            }
+        }
     }
 
     public func filterDownloads(by status: DownloadStatus?) -> [Download] {
@@ -265,6 +278,8 @@ extension DownloadManager: URLSessionDownloadDelegate {
               var download = downloads.first(where: { $0.id == taskId }) else { return }
 
         let destination = download.destinationFolder.appendingPathComponent(download.filename)
+        var errorMsg: String? = nil
+        
         do {
             try FileManager.default.createDirectory(at: download.destinationFolder, withIntermediateDirectories: true)
             if FileManager.default.fileExists(atPath: destination.path) {
@@ -275,18 +290,22 @@ extension DownloadManager: URLSessionDownloadDelegate {
             download.downloadedBytes = download.totalBytes
         } catch {
             download.status = .failed
-            download.errorMessage = error.localizedDescription
+            errorMsg = error.localizedDescription
+            download.errorMessage = errorMsg
         }
 
-        downloadTasks.removeValue(forKey: taskId)
-        speedTrackers.removeValue(forKey: taskId)
-        activeDownloads.removeValue(forKey: taskId)
-        resumeData.removeValue(forKey: taskId)
-        resumeBaseBytes.removeValue(forKey: taskId)
+        let finalDownload = download
+        let finalTaskId = taskId
 
         DispatchQueue.main.async { [weak self] in
-            self?.updateDownload(download)
-            self?.startNextPending()
+            guard let self = self else { return }
+            self.downloadTasks.removeValue(forKey: finalTaskId)
+            self.speedTrackers.removeValue(forKey: finalTaskId)
+            self.activeDownloads.removeValue(forKey: finalTaskId)
+            self.resumeData.removeValue(forKey: finalTaskId)
+            self.resumeBaseBytes.removeValue(forKey: finalTaskId)
+            self.updateDownload(finalDownload)
+            self.startNextPending()
         }
     }
 
@@ -308,19 +327,27 @@ extension DownloadManager: URLSessionDownloadDelegate {
             download.speed = tracker.calculateSpeed(bytes: totalBytesWritten)
         }
 
+        let downloadId = download.id
+        let updatedDownload = download
+        let shouldUpdateDb: Bool
+
+        let now = Date()
+        if let lastUpdate = lastDbUpdate[downloadId], now.timeIntervalSince(lastUpdate) < dbUpdateInterval {
+            shouldUpdateDb = false
+        } else {
+            lastDbUpdate[downloadId] = now
+            shouldUpdateDb = true
+        }
+
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
-            if let index = self.downloads.firstIndex(where: { $0.id == taskId }) {
-                self.downloads[index] = download
-                self.objectWillChange.send()
+            if let index = self.downloads.firstIndex(where: { $0.id == downloadId }) {
+                self.downloads[index] = updatedDownload
             }
-            
-            let now = Date()
-            if let lastUpdate = self.lastDbUpdate[taskId], now.timeIntervalSince(lastUpdate) < self.dbUpdateInterval {
-                return
+            self.objectWillChange.send()
+            if shouldUpdateDb {
+                self.updateDownload(updatedDownload)
             }
-            self.lastDbUpdate[taskId] = now
-            self.updateDownload(download)
         }
     }
 
@@ -331,7 +358,9 @@ extension DownloadManager: URLSessionDownloadDelegate {
         guard var download = downloads.first(where: { $0.id == taskId }) else { return }
 
         if download.status == .completed {
-            downloadTasks.removeValue(forKey: taskId)
+            DispatchQueue.main.async { [weak self] in
+                self?.downloadTasks.removeValue(forKey: taskId)
+            }
             return
         }
 
@@ -345,15 +374,18 @@ extension DownloadManager: URLSessionDownloadDelegate {
         download.status = .failed
         download.errorMessage = error.localizedDescription
 
-        downloadTasks.removeValue(forKey: taskId)
-        speedTrackers.removeValue(forKey: taskId)
-        activeDownloads.removeValue(forKey: taskId)
-        resumeData.removeValue(forKey: taskId)
-        resumeBaseBytes.removeValue(forKey: taskId)
+        let finalDownload = download
+        let finalTaskId = taskId
 
         DispatchQueue.main.async { [weak self] in
-            self?.updateDownload(download)
-            self?.startNextPending()
+            guard let self = self else { return }
+            self.downloadTasks.removeValue(forKey: finalTaskId)
+            self.speedTrackers.removeValue(forKey: finalTaskId)
+            self.activeDownloads.removeValue(forKey: finalTaskId)
+            self.resumeData.removeValue(forKey: finalTaskId)
+            self.resumeBaseBytes.removeValue(forKey: finalTaskId)
+            self.updateDownload(finalDownload)
+            self.startNextPending()
         }
     }
 }

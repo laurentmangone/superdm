@@ -19,6 +19,7 @@ public struct Download: Identifiable, Codable, Hashable {
     public var downloadedBytes: Int64
     public var speed: Double
     public var errorMessage: String?
+    public var retryCount: Int
     public let createdAt: Date
     public var updatedAt: Date
 
@@ -32,6 +33,7 @@ public struct Download: Identifiable, Codable, Hashable {
         downloadedBytes: Int64 = 0,
         speed: Double = 0,
         errorMessage: String? = nil,
+        retryCount: Int = 0,
         createdAt: Date = Date(),
         updatedAt: Date = Date()
     ) {
@@ -44,6 +46,7 @@ public struct Download: Identifiable, Codable, Hashable {
         self.downloadedBytes = downloadedBytes
         self.speed = speed
         self.errorMessage = errorMessage
+        self.retryCount = retryCount
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }

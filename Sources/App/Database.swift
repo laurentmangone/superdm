@@ -16,6 +16,7 @@ public class Database {
     private let downloadedBytes = SQLite.Expression<Int64>("downloaded_bytes")
     private let speed = SQLite.Expression<Double>("speed")
     private let errorMessage = SQLite.Expression<String?>("error_message")
+    private let retryCount = SQLite.Expression<Int>("retry_count")
     private let createdAt = SQLite.Expression<Double>("created_at")
     private let updatedAt = SQLite.Expression<Double>("updated_at")
 
@@ -49,9 +50,12 @@ public class Database {
                 t.column(downloadedBytes, defaultValue: 0)
                 t.column(speed, defaultValue: 0)
                 t.column(errorMessage)
+                t.column(retryCount, defaultValue: 0)
                 t.column(createdAt)
                 t.column(updatedAt)
             })
+            
+            try db?.run("ALTER TABLE downloads ADD COLUMN retry_count INTEGER DEFAULT 0")
         } catch {
             print("Database setup error: \(error)")
         }
@@ -68,11 +72,11 @@ public class Database {
             downloadedBytes <- download.downloadedBytes,
             speed <- download.speed,
             errorMessage <- download.errorMessage,
+            retryCount <- download.retryCount,
             createdAt <- download.createdAt.timeIntervalSince1970,
             updatedAt <- download.updatedAt.timeIntervalSince1970
         )
         
-        print("DB Insert: \(download.filename) - status: \(download.status.rawValue)")
         try db?.run(insert)
     }
 
@@ -86,6 +90,7 @@ public class Database {
             downloadedBytes <- download.downloadedBytes,
             speed <- download.speed,
             errorMessage <- download.errorMessage,
+            retryCount <- download.retryCount,
             updatedAt <- Date().timeIntervalSince1970
         ))
     }
@@ -115,6 +120,7 @@ public class Database {
                 downloadedBytes: row[downloadedBytes],
                 speed: row[speed],
                 errorMessage: row[errorMessage],
+                retryCount: row[retryCount],
                 createdAt: Date(timeIntervalSince1970: row[createdAt]),
                 updatedAt: Date(timeIntervalSince1970: row[updatedAt])
             )
@@ -123,7 +129,7 @@ public class Database {
 
         return results
     }
-
+    
     public func fetch(status filterStatus: DownloadStatus? = nil) throws -> [Download] {
         guard let db = db else { return [] }
         var results: [Download] = []
@@ -149,6 +155,7 @@ public class Database {
                 downloadedBytes: row[downloadedBytes],
                 speed: row[speed],
                 errorMessage: row[errorMessage],
+                retryCount: row[retryCount],
                 createdAt: Date(timeIntervalSince1970: row[createdAt]),
                 updatedAt: Date(timeIntervalSince1970: row[updatedAt])
             )
@@ -157,7 +164,7 @@ public class Database {
 
         return results
     }
-
+    
     public func get(id downloadId: UUID) throws -> Download? {
         guard let db = db else { return nil }
         let target = downloads.filter(id == downloadId.uuidString)
@@ -178,6 +185,7 @@ public class Database {
             downloadedBytes: row[downloadedBytes],
             speed: row[speed],
             errorMessage: row[errorMessage],
+            retryCount: row[retryCount],
             createdAt: Date(timeIntervalSince1970: row[createdAt]),
             updatedAt: Date(timeIntervalSince1970: row[updatedAt])
         )
