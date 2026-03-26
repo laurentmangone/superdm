@@ -18,9 +18,6 @@ swift build -c release
 echo "Creating .app bundle..."
 rm -rf "${STAGING_DIR}"
 mkdir -p "${STAGING_DIR}/${APP_NAME}.app/Contents/MacOS"
-mkdir -p "${SOURCES_DIR}"
-
-cp "${BUILD_DIR}/superdm-gui" "${SOURCES_DIR}/"
 
 cat > "${STAGING_DIR}/${APP_NAME}.app/Contents/Info.plist" << 'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -28,7 +25,7 @@ cat > "${STAGING_DIR}/${APP_NAME}.app/Contents/Info.plist" << 'EOF'
 <plist version="1.0">
 <dict>
     <key>CFBundleExecutable</key>
-    <string>sources/superdm-gui</string>
+    <string>MacOS/superdm-gui</string>
     <key>CFBundleIdentifier</key>
     <string>com.superdm.app</string>
     <key>CFBundleName</key>
