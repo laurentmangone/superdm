@@ -54,8 +54,6 @@ public class Database {
                 t.column(createdAt)
                 t.column(updatedAt)
             })
-            
-            try db?.run("ALTER TABLE downloads ADD COLUMN retry_count INTEGER DEFAULT 0")
         } catch {
             print("Database setup error: \(error)")
         }
