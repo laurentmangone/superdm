@@ -36,6 +36,10 @@ struct ContentView: View {
         !selectedDownloadIds.isEmpty
     }
     
+    private var canChangeDestination: Bool {
+        !selectedDownloadIds.isEmpty
+    }
+    
     var body: some View {
         NavigationSplitView {
             SidebarView(selectedStatus: $selectedStatus, downloadManager: downloadManager)
@@ -92,6 +96,12 @@ struct ContentView: View {
                 .disabled(!canDelete)
                 .keyboardShortcut(.delete, modifiers: [])
                 .help("Delete download")
+                
+                Button(action: changeDestinationSelected) {
+                    Label("Set Destination", systemImage: "folder")
+                }
+                .disabled(!canChangeDestination)
+                .help("Change destination folder")
             }
         }
         .sheet(isPresented: $showingAddSheet) {
@@ -134,6 +144,19 @@ struct ContentView: View {
             DownloadManager.shared.removeDownload(download)
         }
         selectedDownloadIds.removeAll()
+    }
+    
+    private func changeDestinationSelected() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = true
+        panel.directoryURL = Preferences.shared.defaultDownloadFolder
+        
+        if panel.runModal() == .OK, let url = panel.url {
+            DownloadManager.shared.changeDestination(for: Array(selectedDownloadIds), to: url)
+        }
     }
 }
 

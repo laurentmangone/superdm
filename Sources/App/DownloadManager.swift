@@ -270,6 +270,32 @@ public class DownloadManager: NSObject, ObservableObject {
         guard let status = status else { return downloads }
         return downloads.filter { $0.status == status }
     }
+    
+    public func changeDestination(for downloadIds: [UUID], to newDestination: URL) {
+        for id in downloadIds {
+            guard let index = downloads.firstIndex(where: { $0.id == id }) else { continue }
+            var download = downloads[index]
+            let oldDestination = download.destinationFolder.appendingPathComponent(download.filename)
+            
+            download.destinationFolder = newDestination
+            downloads[index] = download
+            
+            if download.status == .completed && FileManager.default.fileExists(atPath: oldDestination.path) {
+                let newPath = newDestination.appendingPathComponent(download.filename)
+                do {
+                    try FileManager.default.createDirectory(at: newDestination, withIntermediateDirectories: true)
+                    if FileManager.default.fileExists(atPath: newPath.path) {
+                        try FileManager.default.removeItem(at: newPath)
+                    }
+                    try FileManager.default.moveItem(at: oldDestination, to: newPath)
+                } catch {
+                    print("Failed to move file to new destination: \(error)")
+                }
+            }
+            
+            updateDownload(download)
+        }
+    }
 }
 
 extension DownloadManager: URLSessionDownloadDelegate {
